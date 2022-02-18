@@ -8,194 +8,189 @@
 #define MAXCOM 1000 // max number of letters to be supported
 #define MAXLIST 100 // max number of commands to be supported
 
-// main()
 
-// getinput()
-// input --> forkm
-// if input == "exit"; terminate
-
-// int readInput(char* str)
-// {
-//     char* line = NULL;
-//     size_t linesize = 0;
-
-  
-//     if (getline(&line, &linesize, stdin) == -1){
-//         if (feof(stdin)) {
-//             printf("ree");
-//             printf(line);
-//             return 0; // We recieved an EOF
-            
-//         } else  {
-//             printf(line);
-//             perror("readline");
-//             return -1;
-//         }
-//     } else{
-//         printf("jsh says: what is ");
-//         printf(line);
-//         return 1 ;
-//     }
-// }
-
-// void jsh_loop(void){
-//     int rc = fork();
-
-//     if (rc < 0){
-//         fprintf(stderr, "fork failed\n");
-//         exit(1);
-//     } else if (rc == 0){ // child (new process)
-//         printf("hello, I am child (pid: %d)\n", (int) getpid());
-//         // char *myargs[3] = {"wc", "shell.c", NULL};
-//         execvp(myargs[0], myargs);
-//         printf("ree");
-
-
-//         execvp(word, )
-        
-//     } else { // parent process
-//         int rc_wait = wait(NULL);
-//         printf("hello, I am parent of %d (rc_wait:%d) (pid:%d)\n",
-//                 rc, rc_wait, (int) getpid());
-//     }
-
-// }
+void exec_no_pipe(char** command);
+void exec_pipe(char*** commands, int i, int pc);
 
 int main(int argc, char **argv){
-    // Initialize strings for command, args, and piped args
-    // char inputString[MAXCOM]; //, *parsedArgs[MAXLIST];
-    // char* parsedArgsPiped[MAXLIST];
-    // int execFlag = 0;
-
-    // continue loop
-    // char* word;
 
     while (1) {
         printf("jsh$ ");
-        // take input
-        // if (readInput(inputString))
-        //     continue;
-
-
-        // * String Parsing
         // Variable Declaration
         char* line = NULL;
         size_t buf_size = 0;
         size_t line_size = 0;
         int i = 0;
+        int j = 0;
         int wc = 0; // word count
         int pc = 0; // pipe count
-        int status = 0;
 
         int commands_lens[MAXLIST];
         
 
-
         // Get input
         line_size = getline(&line, &buf_size, stdin);
-        printf("jsh says: what is %s", line);
+
+        if (strcmp("exit\n", line) == 0) return 0; 
 
         // Count words/spaces and pipes
         for (i = 0; i < line_size; i++){
-            // printf("%c, wc: %d, pc: %d\n", line[i], wc, pc);
-            if (line[i] == ' '){
-                wc++;
+            // New word
+            if ((line[i] == ' ') &&  (i != 0)
+                && (line[i-1] != '|') &&  (line[i-1] != ' ')){
+                    wc++;    
+            // Pipe case        
             } else if (line[i] == '|'){
-                // TODO: White space detection around piping
+                if (line[i-1] != ' ') wc++;
                 commands_lens[pc] = wc;
-                // printf("PIPE FOUND AT: %d, prev pc: %d, wc: %d\n", i, pc, wc);
                 pc++;
                 wc = 0;
             }
         }
-        if(pc == 0) wc++;
-        commands_lens[pc] = wc;
-
-        
-        // printf("There are %d words.\n", wc);
-        printf("\tThere are %d pipes.\n", pc);
-
-        for (i = 0; i <= pc; i++){
-            printf("\tCommand %d has len: %d\n", i, commands_lens[i]);
+        if (line[line_size-2] != ' ' && line[line_size-2] != '|'){
+            wc++;
         }
+        commands_lens[pc] = wc;
+        
 
         // No pipe case
-        char* command[commands_lens[0]];
-        
         if (pc == 0){
-            printf("No pipe case\n");
-            printf("\tLen of curr command: %d\n", commands_lens[0]);
+            char* command_nop[commands_lens[0]];
             
             // Parses string
             for(i = 0; i < commands_lens[0]; i++){
-                command[i] = strsep(&line, " ");
-                printf("\tWord: %d is %s\n", i, command[i]);
-
-                // Removes newline
+                command_nop[i] = strsep(&line, " ");
+                
+                // Removes newline at th end
                 if(i == commands_lens[0] - 1){
-                    // printf("\tReplacing newline in %s:\n", command[i]);
-                    // printf("\t%s len: %ld\n", command[i], strlen(command[i]));
-                    command[i][strlen(command[i])-1] = '\0';
-                    
-                    printf("\t\tAfter newline removal: %s\n", command[i]);
-                    // printf("\t%s len: %ld\n", command[i], strlen(command[i]));
+                    command_nop[i][strlen(command_nop[i])-1] = '\0';
                 }
             }
-            command[commands_lens[0]] = NULL; // the len of the command gets all messed up
+            // Readds array terminator
+            command_nop[commands_lens[0]] = NULL;
+
+
+            exec_no_pipe(command_nop);
+        // Pipe case
+        } else{
+            char** commands[pc + 1];
+            char* commands_wo_pipes[pc + 1];
+
+
+            // Separates by pipes
+            for(i = 0; i < pc + 1; i++){
+                commands_wo_pipes[i] = strsep(&line, "|");
+                if (commands_wo_pipes[i] == NULL) break;
+            }
+
+
+            // Loops through commands; i is the command #
+            for(i = 0; i < pc + 1; i++){
+                char** command = malloc(commands_lens[i] * sizeof(char *));
+        
+                // Parses command ith string; j is the word # in command i
+                for(j = 0; j < commands_lens[i]; j++){
+                    command[j] = strsep(&commands_wo_pipes[i], " ");
+                    
+                    // Found null; trying again
+                    if(command[j][0] == NULL) {
+                        j--;
+                    // if (strlen(command[j]) == 0) j--;
+                    }
+                    else{
+                        // Removes newline at the end or all commands
+                        if(i == pc && j == commands_lens[i] - 1){
+                            command[j][strlen(command[j])-1] = '\0';
+                        }
+                    }
+                }
+                // Reads array terminator
+                command[commands_lens[i]] = NULL;
+                commands[i] = command;
+            }
+
+            exec_pipe(commands, i, pc);
+
+            for(i = 0; i < pc + 1; i++){
+                free(commands[i]);
+            }
         }
-        else{
-            char* command[commands_lens[0]];
+        free(line);
+    }
+    return 0;
+}
+
+
+void exec_no_pipe(char** command){
+    int rc = fork();
+    int status;
+
+    if (rc < 0){
+        fprintf(stderr, "fork failed\n");
+        exit(1);
+    } else if (rc == 0){ // child (new process)
+        printf("child sees (command only): %s\n", command[0]);
+        execvp(command[0], command);
+        printf("jsh error: Command not found\n");
+        exit(127);
+    } else { // parent process
+        int rc_wait = waitpid(rc, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("jsh status: %d\n", WEXITSTATUS(status));
         }
+    }
+}
 
 
-        // break into commands
+void exec_pipe(char*** commands, int i, int pc){
+    int pipes[pc * 2];
+    int status, rc;
 
-        // iterate over commands
-        // for each command fork
-
-        // in child: get command specific command
-
-        // * jsh Loop
-        int rc = fork();
-
+    for (i = 0; i < pc; i++){
+        if (pipe(pipes + i * 2) < 0){
+            fprintf(stderr, "creating pipes failed\n");
+            exit(1);
+        }
+    }
+    i = 0;
+    while (i < pc + 1) {
+        rc = fork();
         if (rc < 0){
             fprintf(stderr, "fork failed\n");
             exit(1);
         } else if (rc == 0){ // child (new process)
-            printf("hello, I am child (pid: %d)\n", (int) getpid());
-            // char *myargs[3] = {"wc", "shell.c", NULL};
-            // execvp(myargs[0], myargs);
-            // printf("ree");
-
-            // char* commandargs = strcat(word, line);
-            // printf(commandargs);
-
-
-
-            execvp(command[0], command);
-            
-        } else { // parent process
-            int rc_wait = wait(&status);
-            printf("Status:%d\n", status);
-            printf("hello, I am parent of %d (rc_wait:%d) (pid:%d)\n",
-                    rc, rc_wait, (int) getpid());
+            if (i != 0) {
+                if (dup2(pipes[(i - 1) * 2], 0) < 0){
+                    fprintf(stderr, "dup2 failed\n");
+                    exit(1);
+                }
+            } if (i != pc) {
+                if (dup2(pipes[i * 2 + 1], 1) < 0){
+                    fprintf(stderr, "dup2 failed\n");
+                    exit(1);
+                }
+            }
+            for (int j = 0; j < 2 * pc; j++){
+                close(pipes[j]);
+            }
+            if (execvp(commands[i][0], commands[i]) < 0){
+                printf("jsh error: Command not found\n");
+                exit(127);
+            }
         }
-
-        // jsh_loop();
-        // process
-        // execFlag = processString(inputString,s
-        // parsedArgs, parsedArgsPiped);
-        // execflag returns zero if there is no command
-        // or it is a builtin command,
-        // 1 if it is a simple command
-        // 2 if it is including a pipe.
-  
-        // execute
-        // if (execFlag == 1)
-        //     execArgs(parsedArgs);
-  
-        // if (execFlag == 2)
-        //     execArgsPiped(parsedArgs, parsedArgsPiped);
+        i++;
     }
-    return 0;
+
+    for (i = 0; i < 2 * pc; i++){
+        close(pipes[i]);
+    }
+
+    for (i = 0; i < pc +1; i++){
+        int rc_wait = waitpid(rc, &status, 0);
+    }
+
+    if (WIFEXITED(status)) {
+        printf("jsh status: %d\n", WEXITSTATUS(status));
+    }
+    return;
 }
