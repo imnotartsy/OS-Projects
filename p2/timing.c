@@ -214,7 +214,5 @@ int main(){
             (getRealTime(&start2, &end2)-wallTimeLoop)/LOOPS2);
 
 
-
-
     return 0;
 }

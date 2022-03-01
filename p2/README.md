@@ -138,7 +138,8 @@ items?  (i.e., things you did in common for all of them, not the one-off
 adjustments you had to figure out just for specific ones)
 
 ### Answer:
-
+I always took many measurements and divided out the amount of measurements to
+get a consistently good average measurement.
 
 ## Question 8
 What measurement result did you get for each of the six measurements?  Based on
@@ -148,34 +149,34 @@ which do you think are not?
 ### Answer:
 
 * allocate one page of memory with `mmap()`
-  * user time:       **[ANSWER HERE]**
-  * system time:     **[ANSWER HERE]**
+  * user time:       2.568900e-08
+  * system time:     3.001990e-07
 
 * lock a mutex with `pthread_mutex_lock()`
-  * user time:       **[ANSWER HERE]**
-  * system time:     **[ANSWER HERE]**
+  * user time:       8.925999e-09
+  * system time:     -4.820000e-10
 
 * writing 4096 Bytes directly (bypassing the disk page cache) to /tmp
-  * wall-clock time: **[ANSWER HERE]**
+  * wall-clock time: 8.486500e-07
 
 * reading 4096 Bytes directly (bypassing the disk page cache) from /tmp
-  * wall-clock time: **[ANSWER HERE]**
+  * wall-clock time: 2.687000e-07
 
 * writing 4096 Bytes to the disk page cache
-  * wall-clock time: **[ANSWER HERE]**
+  * wall-clock time: 2.752250e-06
 
 * reading 4096 Bytes from the disk page cache
-  * wall-clock time: **[ANSWER HERE]**
+  * wall-clock time: 2.834000e-07
 
-* Syscalls:     **[LIST FUNCTIONS HERE]**
-* Not syscalls: **[LIST FUNCTIONS HERE]**
+* Syscalls:     getrusage, timeval, mmap(), read/write
+* Not syscalls: mutex 
 
 
 ## Question 9
 What is the memory page size?  (i.e., that you used with `mmap`)
 
 ### Answer:
-4095 Bytes
+4096 Bytes
 
 
 ## Question 10
@@ -183,7 +184,7 @@ How did you deal with the problem of not being able to lock a mutex
 more than once without unlocking it first?
 
 ### Answer:
-I mad an array to keep track of all of the mutex
+I mad an array to keep track of all of the mutex.
 
 
 ## Question 11
@@ -199,3 +200,6 @@ What affect did the disk page cache have on file access performance?  Did it
 affect reads and write differently?
 
 ### Answer:
+Bypassing disk page cache was a little faster and is clearer on the couchvms.
+On the homework servers, bypassing the disk page does not have as clear of an
+impact.
