@@ -111,11 +111,11 @@ int main(int argc, char **argv){
 
             exec_pipe(commands, i, pc);
 
-            for(i = 0; i < pc + 1; i++){
-                free(commands[i]);
-            }
+            // for(i = 0; i < pc + 1; i++){
+            //     free(commands[i]);
+            // }
         }
-        free(line);
+        // free(line);
     }
     return 0;
 }
@@ -189,8 +189,8 @@ void exec_pipe(char*** commands, int i, int pc){
         int rc_wait = waitpid(rc, &status, 0);
     }
 
-    if (WIFEXITED(status)) {
+    // if (WIFEXITED(status)) {
         printf("jsh status: %d\n", WEXITSTATUS(status));
-    }
+    // }
     return;
 }
