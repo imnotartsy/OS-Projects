@@ -96,6 +96,8 @@ the overall latency time, even though appearing. The second approach is better,
 since the time it takes to start and end is removed. However, this may change
 with the relative time lengths of the loop and function `foo()`
 
+The second approach therefore removes the latency of calling start and end,
+which may be larger than the function call producing an incorrect measurement.
 
 
 ## Question 5
@@ -157,10 +159,10 @@ which do you think are not?
   * system time:     -4.820000e-10
 
 * writing 4096 Bytes directly (bypassing the disk page cache) to /tmp
-  * wall-clock time: 8.486500e-07
+  * wall-clock time: 9.321817e-04
 
 * reading 4096 Bytes directly (bypassing the disk page cache) from /tmp
-  * wall-clock time: 2.687000e-07
+  * wall-clock time: 2.859169e-04
 
 * writing 4096 Bytes to the disk page cache
   * wall-clock time: 2.752250e-06
@@ -170,6 +172,7 @@ which do you think are not?
 
 * Syscalls:     getrusage, timeval, mmap(), read/write
 * Not syscalls: mutex 
+
 
 
 ## Question 9
@@ -200,6 +203,8 @@ What affect did the disk page cache have on file access performance?  Did it
 affect reads and write differently?
 
 ### Answer:
-Bypassing disk page cache was a little faster and is clearer on the couchvms.
-On the homework servers, bypassing the disk page does not have as clear of an
-impact.
+Using the disk page cache was a lot faster, reading was faster than writing still.
+
+
+
+provide comp111 measurement README.md Makefile timing.c

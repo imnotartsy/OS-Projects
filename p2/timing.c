@@ -17,7 +17,7 @@
 
 #define PAGELEN 4096
 #define LOOPS 1000000
-#define LOOPS2 20000
+#define LOOPS2 10000
 #define LENGTH 4096
 
 static pthread_mutex_t mutex[LOOPS];
@@ -107,17 +107,20 @@ int main(){
 
 
     /* ******************** WRITE BYPASS DISK PAGE CACHE ******************* */
-    int fd = open("/tmp/tpatro01.txt", O_RDWR | O_CREAT | O_DIRECT | O_SYNC, S_IWUSR | S_IRUSR);
-
-    
-    for (i = 0; i < LENGTH; i++) {
-        data[i] = 'z';
+    char data2[LENGTH*2];
+    for (i = 0; i < LENGTH*2; i++) {
+        data2[i] = 'z';
     }
 
+    // printf("Size: %ld\n", sizeof(data));
+    
+    int fd = open("/tmp/tpatro01.txt", O_RDWR | O_CREAT | O_DIRECT | O_SYNC, S_IWUSR | S_IRUSR);
+
+    long unsigned int start_buff = ((((unsigned long)data2 + PAGELEN - 1) / PAGELEN) * PAGELEN);
 
     gettimeofday(&start2, NULL);
     for(i = 0; i < LOOPS2; i++){
-        write(fd, data, LENGTH);
+        write(fd, (void *)start_buff, LENGTH);
     }
     gettimeofday(&end2, NULL);
 
@@ -132,7 +135,12 @@ int main(){
             (getRealTime(&start2, &end2)-wallTimeLoop)/LOOPS2);
 
 
-    fd = open("/tmp/tpatro01.txt", O_RDWR | O_CREAT | O_DIRECT | O_SYNC, S_IWUSR | S_IRUSR);
+
+
+
+     /* ******************** READ BYPASS DISK PAGE CACHE ******************* */
+    
+    fd = open("/tmp/tpatro01.txt", O_APPEND | O_RDWR | O_CREAT | O_DIRECT | O_SYNC, S_IWUSR | S_IRUSR);
 
     gettimeofday(&start2, NULL);
     for(i = 0; i < LOOPS2; i++){}
@@ -140,42 +148,60 @@ int main(){
 
     wallTimeLoop = getRealTime(&start2, &end2);
 
+    // LOOPS2 = 5;
 
-    for (i = 0; i < LENGTH; i++) {
-        data[i] = 'z';
+    // long unsigned int start_buff = ((((unsigned long)data2 + PAGELEN - 1) / PAGELEN) * PAGELEN);
+    char readdata2[2*LENGTH];
+
+    for (i = 0; i < LENGTH*2; i++) {
+        data2[i] = 'z';
     }
 
     for(i = 0; i < LOOPS2; i++){
-        write(fd, data, LENGTH);
+        write(fd, (void *)start_buff, LENGTH);
     }
 
+    lseek(fd, 0, SEEK_SET);
+
+    long unsigned int read_buff = ((((unsigned long)readdata2 + PAGELEN - 1) / PAGELEN) * PAGELEN);
 
     gettimeofday(&start2, NULL);
     for(i = 0; i < LOOPS2; i++){
-        read(fd, readdata, LENGTH);
+        read(fd, (void *)read_buff, LENGTH);
+        // printf("read: %d\n", read(fd, read_buff, LENGTH));
     }
     gettimeofday(&end2, NULL);
 
     close(fd);
     remove("/tmp/tpatro01.txt");
 
+    /* make sure you're actually reading and writing */
+    /* align your buffers, check bytes read is as expected */
+    /* make sure the file has enough data */
+     /* around e-05 */
+     /* around e-5 (slower than write but not Significantly) */
+
+
+
     printf("***************** READ BYPASS DISK PAGE CACHE ****************\n");
     printf("Wall time:\t%e\n",
             (getRealTime(&start2, &end2)-wallTimeLoop)/LOOPS2);
 
 
-
+     /* ******************** WRITE DISK PAGE CACHE ******************* */
 
     fd = open("/tmp/tpatro01.txt", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 
     for (i = 0; i < LENGTH; i++) {
         data[i] = 'z';
     }
+    
+    // start_buff = ((((unsigned long)data + PAGELEN - 1) / PAGELEN) * PAGELEN);
 
 
     gettimeofday(&start2, NULL);
     for(i = 0; i < LOOPS2; i++){
-        write(fd, data, LENGTH);
+        write(fd, (void *)start_buff, LENGTH);
     }
     gettimeofday(&end2, NULL);
 
@@ -186,7 +212,9 @@ int main(){
     printf("Wall time:\t%e\n",
             (getRealTime(&start2, &end2)-wallTimeLoop)/LOOPS2);
 
-
+    
+    
+    /* ******************** READ DISK PAGE CACHE ******************* */
     
     
     fd = open("/tmp/tpatro01.txt", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
