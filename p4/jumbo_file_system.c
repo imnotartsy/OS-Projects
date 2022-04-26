@@ -255,7 +255,7 @@ int jfs_rmdir(const char* directory_name) {
   if (found == 0 && idx == 0){ // file doesn't exist
     printf("\tDir doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
-  } else if (is_dir(found)){ // file is actually a directory
+  } else if (!is_dir(found)){ // file is not directory
     printf("\tDirectory is actually a file; use rm.\n");
     return E_NOT_DIR;
   }
