@@ -15,6 +15,7 @@ static block_num_t current_dir;
 // optional helper function you can implement to tell you if a block is a dir node or an inode
 static bool_t is_dir(block_num_t block_num) {
   // Get block
+  struct block buf;
   int status = read_block(block_num, (void *) (&buf));
   if(status == -1){ printf("is_dir,,, is angry\n"); }
 
@@ -434,7 +435,6 @@ int jfs_stat(const char* name, struct stats* buf) {
   int found = 0;
   int idx = 0;
   for(int i = 0; i < buf1.contents.dirnode.num_entries; i++){
-    // printf("Checking: \n\t%s\n\tand %s", buf2.contents.dirnode.entries[i].name, directory_name);
     if(strncmp(buf1.contents.dirnode.entries[i].name, name, strlen(name)) == 0){
       found = buf1.contents.dirnode.entries[i].block_num;
       idx = i;
@@ -445,15 +445,28 @@ int jfs_stat(const char* name, struct stats* buf) {
   }
   printf("\tFile exists! (good)\n");
 
+  // Set fields from parent node
+  strncpy(buf->name, buf1.contents.dirnode.entries[idx].name, strlen(buf1.contents.dirnode.entries[idx].name));
+  // buf->name = malloc((strlen(buf1.contents.dirnode.entries[idx].name)) + 1);
+  buf->name[strlen(buf1.contents.dirnode.entries[idx].name)] = '\0';
+  buf->block_num = found;
+  // buf->block_num = buf1.contents.dirnode.entries[idx].block_num;
 
-
+  // Get actual dir/i node
   struct block buf2;
-  int status2 = read_block(current_dir, (void *) (&buf2));
+  int status2 = read_block(found, (void *) (&buf2));
   if(status2 == -1){ printf("ERROR: jfs_stat,,, is angry (2)\n"); }
 
-  buf->is_dir = buf1.is_dir;
+  // Set fields from dir/i node
+  buf->is_dir = buf2.is_dir;
 
-  return E_UNKNOWN;
+  // inode fields
+  if(!is_dir(found)){
+    // buf->num_data_blocks = buf2.contents.inode.file_size; // TODO
+    buf->file_size = buf2.contents.inode.file_size;
+  }
+
+  return E_SUCCESS;
 }
 
 
