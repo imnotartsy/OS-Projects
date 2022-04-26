@@ -14,13 +14,11 @@ static block_num_t current_dir;
 
 // optional helper function you can implement to tell you if a block is a dir node or an inode
 static bool_t is_dir(block_num_t block_num) {
-  // printf("\t\tChecking if %d, is dir\n", block_num);
-  struct block buf;
+  // Get block
   int status = read_block(block_num, (void *) (&buf));
   if(status == -1){ printf("is_dir,,, is angry\n"); }
-  //  printf("\t\tBlock %d, is dir (raw)\n", buf.is_dir);
 
-  // check if dir
+  // Check if dir
   if(buf.is_dir == 0){
     return TRUE;
   } else {
@@ -62,6 +60,9 @@ int jfs_mkdir(const char* directory_name) {
   if(status3 == -1){ printf("ERROR: jfs_mkdir,,, is angry (3)\n"); }
 
   printf("\tCurr dir num: %d\n", current_dir);
+  if(buf2.contents.dirnode.num_entries > MAX_DIR_ENTRIES){
+    return E_MAX_DIR_ENTRIES;
+  }
 
   // Check if dir exists
   for(int i = 0; i < buf2.contents.dirnode.num_entries; i++){
@@ -91,16 +92,7 @@ int jfs_mkdir(const char* directory_name) {
   int status2 = write_block(block_num, (void *) (&buf));
   if(status2 == -1){ printf("ERROR: jfs_mkdir,,, is angry (2)\n");  }
 
-  
-
-  // // Check Changes
-  // printf("\tIs dir? %d\n", is_dir(block_num));
-  // printf("\tBLOCK NAME: %d\n", buf.is_dir);
-
-
-
   // Update parent node
-  
   int num_entries = buf2.contents.dirnode.num_entries;
   buf2.contents.dirnode.entries[num_entries].block_num = block_num;
   strncpy(buf2.contents.dirnode.entries[num_entries].name, directory_name, strlen(directory_name));
@@ -110,16 +102,11 @@ int jfs_mkdir(const char* directory_name) {
   int status4 = write_block(current_dir, (void *) (&buf2));
   if(status4 == -1){ printf("ERROR: jfs_mkdir,,, is angry (4)\n"); }
 
-  // printf("\tUdated Dirnode Entries: %d\n", buf2.contents.dirnode.num_entries);
-
   printf("\tDir '%s' was made in current block: %d (block num)\n", directory_name, current_dir);
   return E_SUCCESS;
 
 
-
-  // TODO: E_MAX_NAME_LENGTH, E_MAX_DIR_ENTRIES, E_DISK_FULL *
-
-
+  // TODO: E_MAX_NAME_LENGTH, E_DISK_FULL *
 }
 
 
@@ -154,7 +141,7 @@ int jfs_chdir(const char* directory_name) {
     }
   }
 
-  // If direcoty not found, error
+  // If directory not found, error
   if(found_num == 0){
     printf("\tDir doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
@@ -206,7 +193,10 @@ int jfs_ls(char* directories[MAX_DIR_ENTRIES+1], char* files[MAX_DIR_ENTRIES+1])
     if(is_dir(buf.contents.dirnode.entries[i].block_num)){
       directories[dir_entries] = malloc((strlen(buf.contents.dirnode.entries[i].name)) + 1);
 
+      // Check for good memory allocation 
       if (!directories[dir_entries]){ printf("ERROR: jfs_ls,,, is angry (2)\n"); }
+
+      // Copy memory contents
       strncpy(directories[dir_entries], buf.contents.dirnode.entries[i].name, strlen(buf.contents.dirnode.entries[i].name) + 1);
 
       dir_entries++;
@@ -215,13 +205,17 @@ int jfs_ls(char* directories[MAX_DIR_ENTRIES+1], char* files[MAX_DIR_ENTRIES+1])
     } else {
       files[file_entries] = malloc((strlen(buf.contents.dirnode.entries[i].name)) + 1);
       
+      // Check for good memory allocation 
       if (!files[file_entries]){ printf("ERROR: jfs_ls,,, is angry (2)\n"); }
+
+      // Copy memory contents
       strncpy(files[file_entries], buf.contents.dirnode.entries[i].name, strlen(buf.contents.dirnode.entries[i].name) + 1);
 
       file_entries++;
     } 
   }
 
+  // Readd null terminators
   directories[dir_entries] = NULL;
   files[file_entries] = NULL;
 
@@ -257,13 +251,16 @@ int jfs_rmdir(const char* directory_name) {
     }
   }
 
-  if (found == 0 && idx == 0 && is_dir(found)){
+  if (found == 0 && idx == 0){ // file doesn't exist
     printf("\tDir doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
+  } else if (is_dir(found)){ // file is actually a directory
+    printf("\tDirectory is actually a file; use rm.\n");
+    return E_NOT_DIR;
   }
   
 
-
+  // TODO: E_NOT_EMPTY
   
   // *** If dir exists ***
   // Remove block
@@ -271,31 +268,22 @@ int jfs_rmdir(const char* directory_name) {
   if(status2 == -1){printf("ERROR: jfs_rmdir,,, is angry (1)\n"); }
 
 
-
   // Update parent node
   int num_entries = buf.contents.dirnode.num_entries;
 
   printf("Shifting: %d, to %d\n", idx, num_entries-1); 
   for(int i = idx; i < num_entries - 1; i++){
-    printf("Removing block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
+    printf("\t [Re]moving block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
     buf.contents.dirnode.entries[i].block_num = buf.contents.dirnode.entries[i+1].block_num;
     strncpy(buf.contents.dirnode.entries[i].name, buf.contents.dirnode.entries[i+1].name, strlen(buf.contents.dirnode.entries[i+1].name));
   }
-  
   buf.contents.dirnode.num_entries--;
 
   // Push changes to parent block
   int status4 = write_block(current_dir, (void *) (&buf));
   if(status4 == -1){ printf("ERROR: jfs_rmdir,,, is angry (4)\n"); }
 
-  // printf("\tUdated Dirnode Entries: %d\n", buf2.contents.dirnode.num_entries);
-
-  // printf("\tDir '%s' was made in current block: %d (block num)\n", directory_name, current_dir);
   return E_SUCCESS;
-
-
-
-  // TODO: E_MAX_NAME_LENGTH, E_MAX_DIR_ENTRIES, E_DISK_FULL *
 }
 
 
@@ -313,9 +301,13 @@ int jfs_creat(const char* file_name) {
 
   printf("\tCurr dir num: %d\n", current_dir);
 
+  // TODO: E_MAX_NAME_LENGTH, E_DISK_FULL
+  if(buf2.contents.dirnode.num_entries > MAX_DIR_ENTRIES){
+    return E_MAX_DIR_ENTRIES;
+  }
+
   // Check if dir exists
   for(int i = 0; i < buf2.contents.dirnode.num_entries; i++){
-    // printf("Checking: \n\t%s\n\tand %s", buf2.contents.dirnode.entries[i].name, directory_name);
     if(strncmp(buf2.contents.dirnode.entries[i].name, file_name, strlen(file_name)) == 0){
       return E_EXISTS;
     }
@@ -332,7 +324,7 @@ int jfs_creat(const char* file_name) {
 
   printf("\tNew Block Num: %d\n", block_num);
 
-  // Set directory fields
+  // Set file fields
   buf.is_dir = 1;
   buf.contents.inode.file_size = 0;
 
@@ -342,11 +334,11 @@ int jfs_creat(const char* file_name) {
 
   
 
-
   // Update parent node
   int num_entries = buf2.contents.dirnode.num_entries;
   buf2.contents.dirnode.entries[num_entries].block_num = block_num;
   strncpy(buf2.contents.dirnode.entries[num_entries].name, file_name, strlen(file_name));
+  printf("\tTest Write file name:%s, %s\n", buf2.contents.dirnode.entries[num_entries].name, file_name);
   buf2.contents.dirnode.num_entries++;
 
   // Push changes to parent block
@@ -355,7 +347,6 @@ int jfs_creat(const char* file_name) {
 
   printf("\tFile '%s' was made in current block: %d (block num)\n", file_name, current_dir);
   return E_SUCCESS;
-
 }
 
 
@@ -378,7 +369,7 @@ int jfs_remove(const char* file_name) {
   int found = 0;
   int idx = 0;
   for(int i = 0; i < buf.contents.dirnode.num_entries; i++){
-    // printf("Checking: \n\t%s\n\tand %s", buf2.contents.dirnode.entries[i].name, directory_name);
+
     if(strncmp(buf.contents.dirnode.entries[i].name, file_name, strlen(file_name)) == 0){
       found = buf.contents.dirnode.entries[i].block_num;
       idx = i;
@@ -386,44 +377,40 @@ int jfs_remove(const char* file_name) {
       printf("\tFound %s, at block %d\n", buf.contents.dirnode.entries[i].name, found);
     }
   }
-
-  if (found == 0 && idx == 0 && !is_dir(found)){
+  
+  // Error checking
+  if (found == 0 && idx == 0){ // file doesn't exist
     printf("\tFile doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
+  } else if (is_dir(found)){ // file is actually a directory
+    printf("\tFile is actually a directory; use rmdir.\n");
+    return E_IS_DIR;
   }
   
-
-
   
   // *** If dir exists ***
+
   // Remove block
   int status2 = release_block(found);
   if(status2 == -1){printf("ERROR: jfs_remove,,, is angry (1)\n"); }
 
-
-
   // Update parent node
   int num_entries = buf.contents.dirnode.num_entries;
 
+  // Shift entries
   printf("Shifting: %d, to %d\n", idx, num_entries-1); 
   for(int i = idx; i < num_entries - 1; i++){
-    printf("Removing block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
+    printf("\t[Re]moving block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
     buf.contents.dirnode.entries[i].block_num = buf.contents.dirnode.entries[i+1].block_num;
     strncpy(buf.contents.dirnode.entries[i].name, buf.contents.dirnode.entries[i+1].name, strlen(buf.contents.dirnode.entries[i+1].name));
   }
-  
   buf.contents.dirnode.num_entries--;
 
   // Push changes to parent block
-  int status4 = write_block(found, (void *) (&buf));
-  if(status4 == -1){ printf("ERROR: jfs_remove,,, is angry (4)\n"); }
+  int status3 = write_block(current_dir, (void *) (&buf));
+  if(status3 == -1){ printf("ERROR: jfs_remove,,, is angry (4)\n"); }
 
   return E_SUCCESS;
-
-
-
-  // TODO: E_MAX_NAME_LENGTH, E_MAX_DIR_ENTRIES, E_DISK_FULL *
-
 }
 
 
@@ -436,8 +423,35 @@ int jfs_remove(const char* file_name) {
  *   E_NOT_EXISTS
  */
 int jfs_stat(const char* name, struct stats* buf) {
-  (void) name;
-  (void) buf;
+  // *** Get current_dir ***
+  struct block buf1;
+  int status = read_block(current_dir, (void *) (&buf1));
+  if(status == -1){ printf("ERROR: jfs_stat,,, is angry (1)\n"); }
+
+  printf("\tCurr dir num: %d\n", current_dir);
+
+  // Check if dir exists
+  int found = 0;
+  int idx = 0;
+  for(int i = 0; i < buf1.contents.dirnode.num_entries; i++){
+    // printf("Checking: \n\t%s\n\tand %s", buf2.contents.dirnode.entries[i].name, directory_name);
+    if(strncmp(buf1.contents.dirnode.entries[i].name, name, strlen(name)) == 0){
+      found = buf1.contents.dirnode.entries[i].block_num;
+      idx = i;
+    }
+  }
+  if(found == 0 && idx == 0){
+    return E_NOT_EXISTS;
+  }
+  printf("\tFile exists! (good)\n");
+
+
+
+  struct block buf2;
+  int status2 = read_block(current_dir, (void *) (&buf2));
+  if(status2 == -1){ printf("ERROR: jfs_stat,,, is angry (2)\n"); }
+
+  buf->is_dir = buf1.is_dir;
 
   return E_UNKNOWN;
 }
