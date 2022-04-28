@@ -79,6 +79,10 @@ int jfs_mkdir(const char* directory_name) {
 
   // Make new block
   block_num_t block_num = allocate_block();
+  if(block_num == 0){
+    return E_DISK_FULL;
+  }
+
   struct block buf;
   int status = read_block(block_num, (void *) (&buf));
   if(status == -1){printf("ERROR: jfs_mkdir,,, is angry (1)\n"); }
@@ -107,7 +111,7 @@ int jfs_mkdir(const char* directory_name) {
   return E_SUCCESS;
 
 
-  // TODO: E_MAX_NAME_LENGTH, E_DISK_FULL *
+  // TODO: E_MAX_NAME_LENGTH,
 }
 
 
@@ -302,7 +306,7 @@ int jfs_creat(const char* file_name) {
 
   printf("\tCurr dir num: %d\n", current_dir);
 
-  // TODO: E_MAX_NAME_LENGTH, E_DISK_FULL
+  // TODO: E_MAX_NAME_LENGTH
   if(buf2.contents.dirnode.num_entries > MAX_DIR_ENTRIES){
     return E_MAX_DIR_ENTRIES;
   }
@@ -319,9 +323,13 @@ int jfs_creat(const char* file_name) {
   // *** If file doesn't exit ***
   // Make new block
   block_num_t block_num = allocate_block();
+  if(block_num == 0){
+    return E_DISK_FULL;
+  }
+
   struct block buf;
   int status = read_block(block_num, (void *) (&buf));
-  if(status == -1){printf("ERROR: jfs_creat,,, is angry (1)\n"); }
+  if(status == -1){printf("ERROR: jfs_creat,,, is angry (1)\n");}
 
   printf("\tNew Block Num: %d\n", block_num);
 
@@ -339,7 +347,7 @@ int jfs_creat(const char* file_name) {
   int num_entries = buf2.contents.dirnode.num_entries;
   buf2.contents.dirnode.entries[num_entries].block_num = block_num;
   strncpy(buf2.contents.dirnode.entries[num_entries].name, file_name, strlen(file_name));
-  printf("\tTest Write file name:%s, %s\n", buf2.contents.dirnode.entries[num_entries].name, file_name);
+  printf("\tTest Write file name:%s as %s\n", buf2.contents.dirnode.entries[num_entries].name, file_name);
   buf2.contents.dirnode.num_entries++;
 
   // Push changes to parent block
@@ -462,7 +470,7 @@ int jfs_stat(const char* name, struct stats* buf) {
 
   // inode fields
   if(!is_dir(found)){
-    // buf->num_data_blocks = buf2.contents.inode.file_size; // TODO
+    buf->num_data_blocks = buf2.contents.inode.file_size/BLOCK_SIZE;
     buf->file_size = buf2.contents.inode.file_size;
   }
 
@@ -481,11 +489,94 @@ int jfs_stat(const char* name, struct stats* buf) {
  *   E_NOT_EXISTS, E_IS_DIR, E_MAX_FILE_SIZE, E_DISK_FULL
  */
 int jfs_write(const char* file_name, const void* buf, unsigned short count) {
-  (void) file_name;
-  (void) buf;
-  (void) count;
 
-  return E_UNKNOWN;
+
+  // *** Get current_dir ***
+  struct block buf1;
+  int status = read_block(current_dir, (void *) (&buf1));
+  if(status == -1){ printf("ERROR: jfs_write,,, is angry (1)\n"); }
+
+  printf("\tCurr dir num: %d\n", current_dir);
+
+  // Check if dir exists
+  int found = 0;
+  int idx = 0;
+  for(int i = 0; i < buf1.contents.dirnode.num_entries; i++){
+    if(strncmp(buf1.contents.dirnode.entries[i].name, file_name, strlen(file_name)) == 0){
+      found = buf1.contents.dirnode.entries[i].block_num;
+      idx = i;
+    }
+  }
+
+  // Error checking
+  if(found == 0 && idx == 0){
+    return E_NOT_EXISTS;
+  } else if( is_dir(found)){
+    return E_IS_DIR;
+  }
+  printf("\tFile exists! (good)\n");
+
+
+  // Get actual dir/i node
+  struct block buf2;
+  int status2 = read_block(found, (void *) (&buf2));
+  if(status2 == -1){ printf("ERROR: jfs_write,,, is angry (2)\n"); }
+
+
+  printf("\tCurrent file, %s, has %d bytes of data and %d blocks.\n",
+            file_name, buf2.contents.inode.file_size%BLOCK_SIZE,
+            buf2.contents.inode.file_size/BLOCK_SIZE);
+
+  // if(buf2.contents.inode.file_size )
+  // TOOD: E_MAX_FILE_SIZE
+
+  // TODO: E_MAX_FILE_SIZE, E_DISK_FULL
+
+
+
+  // buf2.contents.inode.num_data_blocks[file_size/BLOCK_SIZE] = malloc(count);
+  // strncpy(buf2.contents.inode.data_blocks[(int)buf2.contents.inode.file_size/BLOCK_SIZE], buf, count);
+  
+
+  
+  if (buf2.contents.inode.file_size%BLOCK_SIZE + count < BLOCK_SIZE){ // get previous block
+    int datablock_num = buf2.contents.inode.file_size/BLOCK_SIZE; // might be plus one
+    printf("\tData is being added to the same block (%d); expected final size: %d.\n", datablock_num, buf2.contents.inode.file_size%BLOCK_SIZE + count);
+
+    block_num_t block_num2 = buf2.contents.inode.data_blocks[datablock_num];
+
+    struct block buf3;
+    int status3 = read_block(block_num2, (void *) (&buf3));
+    if(status3 == -1){ printf("ERROR: jfs_write,,, is angry (2)\n"); }
+
+    printf("\tAttempting to write %s\n", (char*) buf);
+
+  } else { // make a new block; make as many blocks as necessary for the data size (may be more than one)
+    // int datablock_num = buf2.contents.inode.file_size/BLOCK_SIZE; // might be plus one
+    
+
+    // Mak data node
+    block_num_t block_num2 = allocate_block();
+    if(block_num2 == 0){
+      return E_DISK_FULL;
+    }
+    printf("\tData is being added to a new block (%d); expected final size: %d.\n", block_num2, buf2.contents.inode.file_size%BLOCK_SIZE + count);
+  
+
+  }
+
+  
+  // strncpy(buf2.contents.inode.data_blocks[(int)buf2.contents.inode.file_size/BLOCK_SIZE], buf, count);
+  
+  
+  // Increase block size
+  buf2.contents.inode.file_size += count;
+
+  // struct block buf3;
+  int status3 = write_block(found, (void *) (&buf2));
+  if(status3 == -1){ printf("ERROR: jfs_write,,, is angry (2)\n");  }
+
+  return E_SUCCESS;
 }
 
 
