@@ -1,7 +1,8 @@
 #include "jumbo_file_system.h"
 #include <stdio.h> // printf
-#include <string.h> // strncmp(?)
+#include <string.h> // strncmp(?), memcopy
 #include <stdlib.h> // strncpy
+#include <math.h> // ceil
 
 // C does not have a bool type, so I created one that you can use
 typedef char bool_t;
@@ -54,13 +55,14 @@ int jfs_mount(const char* filename) {
  *   E_EXISTS, E_MAX_NAME_LENGTH, E_MAX_DIR_ENTRIES, E_DISK_FULL
  */
 int jfs_mkdir(const char* directory_name) {
+  if (strlen(directory_name) > MAX_NAME_LENGTH) return E_MAX_NAME_LENGTH;
 
   // *** Get current_dir ***
   struct block buf2;
   int status3 = read_block(current_dir, (void *) (&buf2));
   if(status3 == -1){ printf("ERROR: jfs_mkdir,,, is angry (3)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
+  // printf("\tCurr dir num: %d\n", current_dir);
   if(buf2.contents.dirnode.num_entries > MAX_DIR_ENTRIES){
     return E_MAX_DIR_ENTRIES;
   }
@@ -72,7 +74,7 @@ int jfs_mkdir(const char* directory_name) {
       return E_EXISTS;
     }
   }
-  printf("\tDir doesn't exist! (good)\n");
+  // printf("\tDir doesn't exist! (good)\n");
 
   
   // *** If dir doesn't exit ***
@@ -87,7 +89,7 @@ int jfs_mkdir(const char* directory_name) {
   int status = read_block(block_num, (void *) (&buf));
   if(status == -1){printf("ERROR: jfs_mkdir,,, is angry (1)\n"); }
 
-  printf("\tNew Block Num: %d\n", block_num);
+  // printf("\tNew Block Num: %d\n", block_num);
 
   // Set directory fields
   buf.is_dir = 0;
@@ -107,11 +109,10 @@ int jfs_mkdir(const char* directory_name) {
   int status4 = write_block(current_dir, (void *) (&buf2));
   if(status4 == -1){ printf("ERROR: jfs_mkdir,,, is angry (4)\n"); }
 
-  printf("\tDir '%s' was made in current block: %d (block num)\n", directory_name, current_dir);
+  // printf("\tDir '%s' was made in current block: %d (block num)\n", directory_name, current_dir);
   return E_SUCCESS;
 
 
-  // TODO: E_MAX_NAME_LENGTH,
 }
 
 
@@ -125,13 +126,18 @@ int jfs_mkdir(const char* directory_name) {
  *   E_NOT_EXISTS, E_NOT_DIR
  */
 int jfs_chdir(const char* directory_name) {
+  // Root case
+  if (directory_name == NULL) {
+    current_dir = 1;
+    return E_SUCCESS;
+  }
 
   // *** Get current_dir ***
   struct block buf;
   int status = read_block(current_dir, (void *) (&buf));
   if(status == -1){ printf("ERROR: jfs_chdir,,, is angry (1)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
+  // printf("\tCurr dir num: %d\n", current_dir);
   // printf("\tNum dir entries in current: %d\n", buf2.contents.dirnode.num_entries);
 
 
@@ -148,7 +154,7 @@ int jfs_chdir(const char* directory_name) {
 
   // If directory not found, error
   if(found_num == 0){
-    printf("\tDir doesn't exist! (bad)\n");
+    // printf("\tDir doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
   }
 
@@ -156,7 +162,7 @@ int jfs_chdir(const char* directory_name) {
   // If found is a directory, change directory
   if(is_dir(found_num)){
     current_dir = found_num;
-    printf("\tCurr dir updated: %d\n", current_dir);
+    // printf("\tCurr dir updated: %d\n", current_dir);
     return E_SUCCESS;
   } else {
     return E_NOT_DIR;
@@ -183,16 +189,16 @@ int jfs_ls(char* directories[MAX_DIR_ENTRIES+1], char* files[MAX_DIR_ENTRIES+1])
   int status = read_block(current_dir, (void *) (&buf));
   if(status == -1){ printf("ERROR: jfs_ls,,, is angry (1)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
-  printf("\tCur dir entries: %d\n", buf.contents.dirnode.num_entries);
+  // printf("\tCurr dir num: %d\n", current_dir);
+  // printf("\tCur dir entries: %d\n", buf.contents.dirnode.num_entries);
 
   int dir_entries= 0;
   int file_entries = 0;
 
   // Check all blocks
   for(int i = 0; i < buf.contents.dirnode.num_entries; i++){
-    printf("\t\tChecking current dir: %s\n", buf.contents.dirnode.entries[i].name);
-    printf("\t\twith block num: %d\n", buf.contents.dirnode.entries[i].block_num);
+    // printf("\t\tChecking current dir: %s\n", buf.contents.dirnode.entries[i].name);
+    // printf("\t\twith block num: %d\n", buf.contents.dirnode.entries[i].block_num);
     
     // If directory
     if(is_dir(buf.contents.dirnode.entries[i].block_num)){
@@ -241,7 +247,7 @@ int jfs_rmdir(const char* directory_name) {
   int status1 = read_block(current_dir, (void *) (&buf));
   if(status1 == -1){ printf("ERROR: jfs_rmdir,,, is angry (1)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
+  // printf("\tCurr dir num: %d\n", current_dir);
 
   // Check if dir exists
   int found = 0;
@@ -252,20 +258,21 @@ int jfs_rmdir(const char* directory_name) {
       found = buf.contents.dirnode.entries[i].block_num;
       idx = i;
 
-      printf("\tFound %s, at block %d\n", buf.contents.dirnode.entries[i].name, found);
+      // printf("\tFound %s, at block %d\n", buf.contents.dirnode.entries[i].name, found);
     }
   }
 
   if (found == 0 && idx == 0){ // file doesn't exist
-    printf("\tDir doesn't exist! (bad)\n");
+    // printf("\tDir doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
   } else if (!is_dir(found)){ // file is not directory
-    printf("\tDirectory is actually a file; use rm.\n");
+    // printf("\tDirectory is actually a file; use rm.\n");
     return E_NOT_DIR;
   }
+  struct block remove_dir;
+  read_block(found, (void *)(&remove_dir));
+  if (remove_dir.contents.dirnode.num_entries > 0) return E_NOT_EMPTY;
   
-
-  // TODO: E_NOT_EMPTY
   
   // *** If dir exists ***
   // Remove block
@@ -276,9 +283,9 @@ int jfs_rmdir(const char* directory_name) {
   // Update parent node
   int num_entries = buf.contents.dirnode.num_entries;
 
-  printf("Shifting: %d, to %d\n", idx, num_entries-1); 
+  // printf("Shifting: %d, to %d\n", idx, num_entries-1); 
   for(int i = idx; i < num_entries - 1; i++){
-    printf("\t [Re]moving block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
+    // printf("\t [Re]moving block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
     buf.contents.dirnode.entries[i].block_num = buf.contents.dirnode.entries[i+1].block_num;
     strncpy(buf.contents.dirnode.entries[i].name, buf.contents.dirnode.entries[i+1].name, strlen(buf.contents.dirnode.entries[i+1].name));
   }
@@ -299,14 +306,20 @@ int jfs_rmdir(const char* directory_name) {
  *   E_EXISTS, E_MAX_NAME_LENGTH, E_MAX_DIR_ENTRIES, E_DISK_FULL
  */
 int jfs_creat(const char* file_name) {
+
+  // E_MAX_NAME_LENGTH
+  if (strlen(file_name) > MAX_NAME_LENGTH){
+    return E_MAX_NAME_LENGTH;
+  }
+
   // *** Get current_dir ***
   struct block buf2;
   int status3 = read_block(current_dir, (void *) (&buf2));
   if(status3 == -1){ printf("ERROR: jfs_creat,,, is angry (3)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
+  // printf("\tCurr dir num: %d\n", current_dir);
 
-  // TODO: E_MAX_NAME_LENGTH
+  
   if(buf2.contents.dirnode.num_entries > MAX_DIR_ENTRIES){
     return E_MAX_DIR_ENTRIES;
   }
@@ -317,7 +330,7 @@ int jfs_creat(const char* file_name) {
       return E_EXISTS;
     }
   }
-  printf("\tFile doesn't exist! (good)\n");
+  // printf("\tFile doesn't exist! (good)\n");
 
   
   // *** If file doesn't exit ***
@@ -331,30 +344,32 @@ int jfs_creat(const char* file_name) {
   int status = read_block(block_num, (void *) (&buf));
   if(status == -1){printf("ERROR: jfs_creat,,, is angry (1)\n");}
 
-  printf("\tNew Block Num: %d\n", block_num);
+  // printf("\tNew Block Num: %d\n", block_num);
 
   // Set file fields
   buf.is_dir = 1;
   buf.contents.inode.file_size = 0;
+  // init the unused data block to NULL
+  for (long unsigned int i = 0; i < MAX_DATA_BLOCKS; i++) {
+    buf.contents.inode.data_blocks[i] = NULL;
+  }
 
   // Push changes to new dir block
   int status2 = write_block(block_num, (void *) (&buf));
   if(status2 == -1){ printf("ERROR: jfs_creat,,, is angry (2)\n");  }
 
-  
-
   // Update parent node
   int num_entries = buf2.contents.dirnode.num_entries;
   buf2.contents.dirnode.entries[num_entries].block_num = block_num;
   strncpy(buf2.contents.dirnode.entries[num_entries].name, file_name, strlen(file_name));
-  printf("\tTest Write file name:%s as %s\n", buf2.contents.dirnode.entries[num_entries].name, file_name);
+  // printf("\tTest Write file name:%s as %s\n", buf2.contents.dirnode.entries[num_entries].name, file_name);
   buf2.contents.dirnode.num_entries++;
 
   // Push changes to parent block
   int status4 = write_block(current_dir, (void *) (&buf2));
   if(status4 == -1){ printf("ERROR: jfs_creat,,, is angry (4)\n"); }
 
-  printf("\tFile '%s' was made in current block: %d (block num)\n", file_name, current_dir);
+  // printf("\tFile '%s' was made in current block: %d (block num)\n", file_name, current_dir);
   return E_SUCCESS;
 }
 
@@ -372,7 +387,7 @@ int jfs_remove(const char* file_name) {
   int status1 = read_block(current_dir, (void *) (&buf));
   if(status1 == -1){ printf("ERROR: jfs_remove,,, is angry (1)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
+  // printf("\tCurr dir num: %d\n", current_dir);
 
   // Check if dir exists
   int found = 0;
@@ -383,16 +398,16 @@ int jfs_remove(const char* file_name) {
       found = buf.contents.dirnode.entries[i].block_num;
       idx = i;
 
-      printf("\tFound %s, at block %d\n", buf.contents.dirnode.entries[i].name, found);
+      // printf("\tFound %s, at block %d\n", buf.contents.dirnode.entries[i].name, found);
     }
   }
   
   // Error checking
   if (found == 0 && idx == 0){ // file doesn't exist
-    printf("\tFile doesn't exist! (bad)\n");
+    // printf("\tFile doesn't exist! (bad)\n");
     return E_NOT_EXISTS;
   } else if (is_dir(found)){ // file is actually a directory
-    printf("\tFile is actually a directory; use rmdir.\n");
+    // printf("\tFile is actually a directory; use rmdir.\n");
     return E_IS_DIR;
   }
   
@@ -407,9 +422,9 @@ int jfs_remove(const char* file_name) {
   int num_entries = buf.contents.dirnode.num_entries;
 
   // Shift entries
-  printf("Shifting: %d, to %d\n", idx, num_entries-1); 
+  // printf("Shifting: %d, to %d\n", idx, num_entries-1); 
   for(int i = idx; i < num_entries - 1; i++){
-    printf("\t[Re]moving block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
+    // printf("\t[Re]moving block %d, with name %s\n", buf.contents.dirnode.entries[i].block_num, buf.contents.dirnode.entries[i].name);
     buf.contents.dirnode.entries[i].block_num = buf.contents.dirnode.entries[i+1].block_num;
     strncpy(buf.contents.dirnode.entries[i].name, buf.contents.dirnode.entries[i+1].name, strlen(buf.contents.dirnode.entries[i+1].name));
   }
@@ -432,48 +447,87 @@ int jfs_remove(const char* file_name) {
  *   E_NOT_EXISTS
  */
 int jfs_stat(const char* name, struct stats* buf) {
-  // *** Get current_dir ***
-  struct block buf1;
-  int status = read_block(current_dir, (void *) (&buf1));
-  if(status == -1){ printf("ERROR: jfs_stat,,, is angry (1)\n"); }
+  // // *** Get current_dir ***
+  // struct block buf1;
+  // int status = read_block(current_dir, (void *) (&buf1));
+  // if(status == -1){ printf("ERROR: jfs_stat,,, is angry (1)\n"); }
 
-  printf("\tCurr dir num: %d\n", current_dir);
+  // // printf("\tCurr dir num: %d\n", current_dir);
 
-  // Check if dir exists
-  int found = 0;
-  int idx = 0;
-  for(int i = 0; i < buf1.contents.dirnode.num_entries; i++){
-    if(strncmp(buf1.contents.dirnode.entries[i].name, name, strlen(name)) == 0){
-      found = buf1.contents.dirnode.entries[i].block_num;
-      idx = i;
+  // // Check if dir exists
+  // int found = 0;
+  // int idx = 0;
+  // for(int i = 0; i < buf1.contents.dirnode.num_entries; i++){
+  //   if(strncmp(buf1.contents.dirnode.entries[i].name, name, strlen(name)) == 0){
+  //     found = buf1.contents.dirnode.entries[i].block_num;
+  //     idx = i;
+  //   }
+  // }
+  // if(found == 0 && idx == 0){
+  //   return E_NOT_EXISTS;
+  // }
+  // // printf("\tFile exists! (good)\n");
+
+  // // Set fields from parent node
+  // strncpy(buf->name, buf1.contents.dirnode.entries[idx].name, strlen(buf1.contents.dirnode.entries[idx].name));
+  // buf->name[strlen(buf1.contents.dirnode.entries[idx].name)] = '\0';
+  // buf->block_num = found;
+  // // buf->block_num = buf1.contents.dirnode.entries[idx].block_num;
+
+  // // Get actual dir/i node
+  // struct block buf2;
+  // int status2 = read_block(found, (void *) (&buf2));
+  // if(status2 == -1){ printf("ERROR: jfs_stat,,, is angry (2)\n"); }
+
+  // // Set fields from dir/i node
+  // buf->is_dir = buf2.is_dir;
+
+  // // Update inode fields
+  // if(!is_dir(found)){
+  //   buf->num_data_blocks = buf2.contents.inode.file_size/BLOCK_SIZE;
+  //   buf->file_size = buf2.contents.inode.file_size;
+  // }
+
+  // return E_SUCCESS;
+
+  int found = FALSE;
+  struct block temp;
+
+  // Read current
+  read_block(current_dir, (void *)(&temp));
+
+  // Look in directory
+  for (int i = 0; i < temp.contents.dirnode.num_entries; i++) {
+
+    // If found
+    if (strcmp(name, temp.contents.dirnode.entries[i].name) == 0) {
+      int stat_block_num = temp.contents.dirnode.entries[i].block_num;
+      struct block stat_block;
+
+      // Read block
+      read_block(stat_block_num, (void *)(&stat_block));
+
+
+      buf->is_dir = stat_block.is_dir;
+      strcpy(buf->name, name);
+      buf->block_num = stat_block_num;
+
+      // if an inode, store num data blocks and file size
+      if (stat_block.is_dir == 1) {
+        buf->num_data_blocks = 0;
+        for (int i = 0; i < MAX_DATA_BLOCKS; i++) {
+          if (stat_block.contents.inode.data_blocks[i] != NULL) {
+            buf->num_data_blocks++;
+          }
+        }
+
+        buf->file_size = stat_block.contents.inode.file_size;
+      }
+      found = TRUE;
+      break;
     }
   }
-  if(found == 0 && idx == 0){
-    return E_NOT_EXISTS;
-  }
-  printf("\tFile exists! (good)\n");
-
-  // Set fields from parent node
-  strncpy(buf->name, buf1.contents.dirnode.entries[idx].name, strlen(buf1.contents.dirnode.entries[idx].name));
-  // buf->name = malloc((strlen(buf1.contents.dirnode.entries[idx].name)) + 1);
-  buf->name[strlen(buf1.contents.dirnode.entries[idx].name)] = '\0';
-  buf->block_num = found;
-  // buf->block_num = buf1.contents.dirnode.entries[idx].block_num;
-
-  // Get actual dir/i node
-  struct block buf2;
-  int status2 = read_block(found, (void *) (&buf2));
-  if(status2 == -1){ printf("ERROR: jfs_stat,,, is angry (2)\n"); }
-
-  // Set fields from dir/i node
-  buf->is_dir = buf2.is_dir;
-
-  // inode fields
-  if(!is_dir(found)){
-    buf->num_data_blocks = buf2.contents.inode.file_size/BLOCK_SIZE;
-    buf->file_size = buf2.contents.inode.file_size;
-  }
-
+  if (found == FALSE) return E_NOT_EXISTS;
   return E_SUCCESS;
 }
 
@@ -489,93 +543,118 @@ int jfs_stat(const char* name, struct stats* buf) {
  *   E_NOT_EXISTS, E_IS_DIR, E_MAX_FILE_SIZE, E_DISK_FULL
  */
 int jfs_write(const char* file_name, const void* buf, unsigned short count) {
-
-
   // *** Get current_dir ***
-  struct block buf1;
-  int status = read_block(current_dir, (void *) (&buf1));
-  if(status == -1){ printf("ERROR: jfs_write,,, is angry (1)\n"); }
-
-  printf("\tCurr dir num: %d\n", current_dir);
-
-  // Check if dir exists
   int found = 0;
-  int idx = 0;
-  for(int i = 0; i < buf1.contents.dirnode.num_entries; i++){
-    if(strncmp(buf1.contents.dirnode.entries[i].name, file_name, strlen(file_name)) == 0){
-      found = buf1.contents.dirnode.entries[i].block_num;
-      idx = i;
+  struct block temp;
+  read_block(current_dir, (void *)(&temp));
+
+  int entry = temp.contents.dirnode.num_entries;
+  int more = TRUE;
+
+  // Check if file exists
+  for (int i = 0; i < entry; i++) {
+    if (strcmp(file_name, temp.contents.dirnode.entries[i].name) == 0) {
+      found = temp.contents.dirnode.entries[i].block_num;
     }
   }
 
-  // Error checking
-  if(found == 0 && idx == 0){
+  // Error Checking
+  if (found == 0){
     return E_NOT_EXISTS;
-  } else if( is_dir(found)){
+  }
+  if (is_dir(found)){
     return E_IS_DIR;
   }
-  printf("\tFile exists! (good)\n");
 
+  // Get file 
+  struct block write_file;
+  read_block(found, (void *)(&write_file));
 
-  // Get actual dir/i node
-  struct block buf2;
-  int status2 = read_block(found, (void *) (&buf2));
-  if(status2 == -1){ printf("ERROR: jfs_write,,, is angry (2)\n"); }
-
-
-  printf("\tCurrent file, %s, has %d bytes of data and %d blocks.\n",
-            file_name, buf2.contents.inode.file_size%BLOCK_SIZE,
-            buf2.contents.inode.file_size/BLOCK_SIZE);
-
-  // if(buf2.contents.inode.file_size )
-  // TOOD: E_MAX_FILE_SIZE
-
-  // TODO: E_MAX_FILE_SIZE, E_DISK_FULL
-
-
-
-  // buf2.contents.inode.num_data_blocks[file_size/BLOCK_SIZE] = malloc(count);
-  // strncpy(buf2.contents.inode.data_blocks[(int)buf2.contents.inode.file_size/BLOCK_SIZE], buf, count);
-  
-
-  
-  if (buf2.contents.inode.file_size%BLOCK_SIZE + count < BLOCK_SIZE){ // get previous block
-    int datablock_num = buf2.contents.inode.file_size/BLOCK_SIZE; // might be plus one
-    printf("\tData is being added to the same block (%d); expected final size: %d.\n", datablock_num, buf2.contents.inode.file_size%BLOCK_SIZE + count);
-
-    block_num_t block_num2 = buf2.contents.inode.data_blocks[datablock_num];
-
-    struct block buf3;
-    int status3 = read_block(block_num2, (void *) (&buf3));
-    if(status3 == -1){ printf("ERROR: jfs_write,,, is angry (2)\n"); }
-
-    printf("\tAttempting to write %s\n", (char*) buf);
-
-  } else { // make a new block; make as many blocks as necessary for the data size (may be more than one)
-    // int datablock_num = buf2.contents.inode.file_size/BLOCK_SIZE; // might be plus one
-    
-
-    // Mak data node
-    block_num_t block_num2 = allocate_block();
-    if(block_num2 == 0){
-      return E_DISK_FULL;
-    }
-    printf("\tData is being added to a new block (%d); expected final size: %d.\n", block_num2, buf2.contents.inode.file_size%BLOCK_SIZE + count);
-  
-
+  // Calculate Sizes
+  int total_size = count + write_file.contents.inode.file_size;
+  if ((long unsigned int) total_size > MAX_FILE_SIZE){
+    return E_MAX_FILE_SIZE;
   }
 
-  
-  // strncpy(buf2.contents.inode.data_blocks[(int)buf2.contents.inode.file_size/BLOCK_SIZE], buf, count);
-  
-  
-  // Increase block size
-  buf2.contents.inode.file_size += count;
+  int num_blocks_needed = 0;
+  int num_bytes_remaining = 0;
+  char *new_buf = (char *)buf;
 
-  // struct block buf3;
-  int status3 = write_block(found, (void *) (&buf2));
-  if(status3 == -1){ printf("ERROR: jfs_write,,, is angry (2)\n");  }
+  // Check unused space in a block
+  int extra_file_size = write_file.contents.inode.file_size % BLOCK_SIZE;
 
+  // If no unused space file size empty, calculate needed blocks
+  if ((extra_file_size == 0) || (write_file.contents.inode.file_size == 0)) {
+    num_blocks_needed = count / BLOCK_SIZE;
+    num_bytes_remaining = count % BLOCK_SIZE;
+  } else { // If there is unused space in a block, fill that space
+
+    // Find partially filled block
+    int last_used_block = 0;
+    while (write_file.contents.inode.data_blocks[last_used_block] != NULL){
+      last_used_block++;
+    }
+    last_used_block--;
+
+    // Find partially filled block 
+    int amount_to_write = 0;
+    if (count <= (BLOCK_SIZE - extra_file_size)) {
+      amount_to_write = count;
+      more = FALSE;
+    } else {
+      amount_to_write = BLOCK_SIZE - extra_file_size;
+      more = TRUE;
+    }
+
+    // Read partially filled block
+    char *last_block = malloc(BLOCK_SIZE * (sizeof(char)));
+    read_block(write_file.contents.inode.data_blocks[last_used_block], (void *)(last_block));
+
+    // Copy  and write back to the data block
+    memcpy((void *)(&last_block[extra_file_size]), buf, amount_to_write);
+    write_block(write_file.contents.inode.data_blocks[last_used_block], (void *)last_block);
+    new_buf = &new_buf[amount_to_write];
+    free(last_block);
+
+    // Get num blocks needed + remaining bytes
+    num_blocks_needed = (count - amount_to_write) / BLOCK_SIZE;
+    num_bytes_remaining = (count - amount_to_write) % BLOCK_SIZE;
+  }
+
+
+  // Run this block if there is more to write 
+  if (more == TRUE) {
+    // If there are bytes remaining
+    if (num_bytes_remaining > 0){
+      num_blocks_needed++;
+    }
+
+    // Find first unused spot in data blocks array
+    int count = 0;
+    while (write_file.contents.inode.data_blocks[count] != NULL) count++;
+    block_num_t new_block_arr[num_blocks_needed];
+
+    // For each new block, allocate, store, and write data
+    for (int i = 0; i < num_blocks_needed; i++) {
+      // Allocate
+      block_num_t new_block = allocate_block();
+      if (new_block == 0){
+        return E_DISK_FULL;
+      }
+      new_block_arr[i] = new_block;
+
+      // Write block
+      write_block(new_block_arr[i], (void *)new_buf);
+      write_file.contents.inode.data_blocks[count] = new_block_arr[i];
+      count++;
+      new_buf = &new_buf[(i + 1) * BLOCK_SIZE];
+    }
+
+
+  }
+  write_file.contents.inode.file_size = total_size;
+  write_block(found, (void *)(&write_file));
+ 
   return E_SUCCESS;
 }
 
@@ -594,11 +673,63 @@ int jfs_write(const char* file_name, const void* buf, unsigned short count) {
  *   E_NOT_EXISTS, E_IS_DIR
  */
 int jfs_read(const char* file_name, void* buf, unsigned short* ptr_count) {
-  (void) file_name;
-  (void) buf;
-  (void) ptr_count;
+  // *** Get current_dir ***
+  int found = 0;
+  struct block buf1;
+  read_block(current_dir, (void *)(&buf1));
 
-  return E_UNKNOWN;
+  // printf("\tCurr dir num: %d\n", current_dir);
+
+
+  // Check if file exists
+  for (int i = 0; i < buf1.contents.dirnode.num_entries; i++) {
+    if (strcmp(file_name, buf1.contents.dirnode.entries[i].name) == 0) {
+      found = buf1.contents.dirnode.entries[i].block_num;
+    }
+  }
+
+  // Error checking
+  if (found == 0){
+    return E_NOT_EXISTS;
+  } else if (is_dir(found)){
+    return E_IS_DIR;
+  }
+
+  // printf("\tFile exists! (good)\n");
+
+  // Get actual dir/i node
+  struct block read_file;
+  read_block(found, (void *)(&read_file));
+  int size = read_file.contents.inode.file_size;
+
+  *ptr_count = (size < *ptr_count) ? size : *ptr_count; 
+  int overflow = *ptr_count % BLOCK_SIZE;
+  int count = 0;
+
+  // Get of data blocks to read
+  while (read_file.contents.inode.data_blocks[count] != NULL) {
+    count++;    
+  }
+  char *new_buf = (char *)buf;
+
+
+  // For each data block, read and copy
+  for (int i = 0; i < count; i++) {
+
+    char *data = malloc(BLOCK_SIZE * (sizeof(char)));
+    read_block(read_file.contents.inode.data_blocks[i], (void *)data);
+
+    if (i == (count - 1) && ((*ptr_count % 64) != 0)) {
+      memcpy((void *)(&new_buf[i * BLOCK_SIZE]), (void *)data, overflow);
+    }
+    else {
+      memcpy((void *)(&new_buf[i * BLOCK_SIZE]), (void *)data, BLOCK_SIZE);
+    }
+    free(data);
+
+  }
+
+  return E_SUCCESS;
 }
 
 
